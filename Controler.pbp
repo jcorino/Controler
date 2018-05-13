@@ -1,0 +1,177 @@
+'****************************************************************
+'*  Name    : UNTITLED.BAS                                      *
+'*  Author  : Juan Manuel Corino - jcorino@gmail.com            *
+'*  Notice  : Copyright (c) 2009 Juan Manuel Corino             *
+'*          : All Rights Reserved                               *
+'*  Date    : 15/08/2011                                        *
+'*  Version : 1.0                                               *
+'*  Notes   :                                                   *
+'*          :                                                   *
+'****************************************************************
+dEFINE OSC 20 
+
+'Configurazione usart 250000 
+'DEFINE HSER_BITS 9 
+'DEFINE HSER_RCSTA 208 
+'DEFINE HSER_TXSTA 101 
+'DEFINE HSER_BAUD 250000 
+DEFINE HSER_CLROERR 1 'Hser clear overflow automatically 
+CMCON = %00000111 
+
+SYMBOL IN =PORTC.0 
+
+INPUT IN 
+
+
+TMP     VAR WORD 
+TMP1    VAR WORD 
+Canal   VAR byte[32] 
+BREAK   VAR WORD 
+NDMX    VAR WORD
+temp    var byte
+
+a       var word
+b       var word
+c       var word
+d       var word
+e       var word
+f       var word
+g       var word
+Dummy   var word
+
+MaxEncoder  var word[16]
+MinEncoder  var word[16]
+ActualDMX   var byte[16]
+TargetEnc   var word[16]
+AntTargetEnc    var word[16]
+TimeOutSend     var byte[16]
+TargetVel   var byte[16]
+MaxDmx      var word
+TXBYTE      var byte
+CRC         var byte
+
+
+ 
+Clear 
+
+OPTION_REG.7=1 'No pull-up PortB 
+maxDmx = 255
+
+RCSTA = 208
+TXSTA = 101
+spbrg = 4           '250 KBaud Con Cristal 20Mhz
+
+maxencoder[0] = 35250      '#####DEBUG
+minencoder[0] = 33320      '#####DEBUG
+maxencoder[3] = 35356      '#####DEBUG
+minencoder[3] = 33104      '#####DEBUG
+
+Pause 500           'Wait for display init 
+
+MAIN:
+
+NDMX=0         '### NUMERO CANAL DMX donde comienza a decodificar
+
+PULSIN in,0,break 
+   gosub salidas
+    IF BREAK>=44 THEN 
+    
+        HSERIN 2000,MAIN,[tmp,tmp1] 
+        if tmp<>0 and tmp1<>0 then 
+            goto main 
+        endif 
+    
+        FOR TMP=0 TO ndmx 
+            HSERIN 10,main,[tmp1] 
+        NEXT TMP 
+    
+        FOR tmp=0 TO 31 
+            hserin 10,main,[canal[tmp]] 
+        NEXT TMP 
+    
+        gosub salidas
+        
+    ENDIF 
+        tmp = targetenc[0]
+        
+GOTO MAIN 
+
+
+Salidas:
+
+    txsta = $24             	'Enable Asynchronous Serial Transmit
+    spbrg = 64              	'19.2 KBaud Con Cristal 20Mhz
+    
+    
+    for temp = 0 to 15 
+        'targetenc[temp] = maxencoder[temp] - ((maxencoder[temp]-minencoder[temp])/(MaxDmx/canal[temp]))
+        a = maxencoder[temp] - minencoder[temp]
+        b = 255
+        e = 1000
+        c = canal[temp] * 10
+        dummy = b * e
+        f = div32 c
+        
+        e = 100
+        dummy = a * e
+        g = div32 f
+        
+        targetenc[temp] = minencoder[temp] + g
+        targetvel[temp] = canal[temp+16]
+        
+        if anttargetenc[temp] = targetenc[temp] then
+            TimeOutSend[temp] = TimeOutSend[temp] + 1
+            if TimeOutSend[temp] = 255 then TimeOutSend[temp] = 0
+        else
+            TimeOutSend[temp] = 0
+        endif
+        
+        anttargetenc[temp] = targetenc[temp]
+        
+    next temp
+    
+'tmpCRC = Asc("k") Xor vel Xor Asc("1") Xor LByte Xor Hbyte Xor NroMotor
+'Cadena = "ik" & Chr(vel) & Chr(tmpCRC) & "1" & Chr(LByte) & Chr(Hbyte) & Chr(NroMotor)
+'OutBuffer = OutBuffer & Cadena
+    
+    for temp = 0 to 15
+    
+        if TimeOutSend[temp] >= 50 then goto continuar
+        tmp = targetenc[temp]
+        CRC = "k" ^ targetvel[temp] ^ "8" ^ tmp.lowbyte ^ tmp.highbyte ^ temp+1
+        TXBYTE = "i"
+        gosub tx
+        TXBYTE = "k"
+        gosub tx
+        TXBYTE = targetvel[temp]
+        gosub tx
+        TXBYTE = crc
+        gosub tx
+        TXBYTE = "8"
+        gosub tx
+        TXBYTE = tmp.lowbyte
+        gosub tx
+        TXBYTE = tmp.highbyte
+        gosub tx
+        TXBYTE = temp+1
+        gosub tx
+continuar:
+    next temp        
+
+RCSTA = 208
+TXSTA = 101
+spbrg = 4              	'250 KBaud Con Cristal 20Mhz
+
+pause 50
+    
+return
+
+
+TX: 
+
+    IF (txsta.5) AND (pir1.4^$1) Then GoTo TX
+    txreg = TXBYTE
+    txsta.5=1   			     'Activar transmisor           
+    Return 
+
+end
