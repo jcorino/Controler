@@ -133,6 +133,13 @@ Salidas:
 'tmpCRC = Asc("k") Xor vel Xor Asc("1") Xor LByte Xor Hbyte Xor NroMotor
 'Cadena = "ik" & Chr(vel) & Chr(tmpCRC) & "1" & Chr(LByte) & Chr(Hbyte) & Chr(NroMotor)
 'OutBuffer = OutBuffer & Cadena
+
+'************************************************
+'FALTA INCORPORAR POLL ToSend
+'tmpCRC = Asc("g") Xor MotorAction(NroMotor).Velocidad Xor Asc("1") Xor Asc("0") Xor Asc("0") Xor NroMotor
+'Form1.MSComm1.Output = "ig" & Chr(MotorAction(NroMotor).Velocidad) & Chr(tmpCRC) & "100" & Chr(NroMotor)
+'************************************************
+
     
     for temp = 0 to 15
     
